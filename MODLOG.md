@@ -17,11 +17,12 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
   `combat` targeting/fire/charge/actives/bombs, `items` pickup values + lists, `floor` room graph and
   exits, `brain` goal selection per update, `presets` named settings (built-in + user), `panel` F8
   mouse menu (presets bar, settings, item tiles, catalog), `bridge` file bridge, `telemetry` EV lines.
-- `legacy/main_v0.3.0.lua` previous single-file version.
+- `legacy/main_v0.3.0.lua` previous single-file version (local only, not published).
 - Tools: `tools/bridge.py` (send console/bot commands), `tools/runlog.py` (EV log report),
   `tools/verify_lua.py` (parse + unknown globals + dead code), `tools/night.py` (night runs: backup,
   watchdog, relaunch), `tools/nightreport.py` (morning report -> `runs/report-*.md`),
-  `tools/bench.py` (30-seed bench, daytime), `tools/deathview.py` (death replays -> PNG + timeline).
+  `tools/bench.py` (30-seed bench, daytime), `tools/deathview.py` (death replays -> PNG + timeline),
+  `tools/progress.py` (progress charts over all sessions -> `runs/progress.png`).
 - `replay` module: ring of the last 90 updates (3 s) the brain saw and did; frozen on each player
   hit, dumped at game over as one `replay` EV line (room map, the hit) + one `rf` line per update.
 - Local git repo at the `isaac-bot` root (no remote); `runs/`, `shots/`, the bridge folder ignored.
@@ -324,6 +325,18 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
   repo in `isaac-bot` (no remote) for the rollbacks.
 - Isaac counts as ready at >= 10% clean wins on Hard over a night (>= 5 of ~50); then the other
   regular characters.
+
+## Publishing decisions (user grilling, 2026-10-16)
+- Publish on GitHub now, as a prototype, with honest numbers (0 clean wins yet, mean floor ~2.3).
+- MIT license, "Copyright (c) 2026 netlesha"; repo name `isaac-bot`.
+- Commit author email rewritten to the GitHub noreply address before the first push (the id comes
+  from GitHub once the user has signed in with `gh auth login --web`).
+- Contents: everything except `legacy/` (mod, tools, README, MODLOG, kb_note). `runs/`, `shots/`
+  stay ignored; the progress chart goes to `docs/progress.png`.
+- README in English, Russian copy in `README.ru.md`; a "How it was made" section says it was built
+  with Claude Code.
+- Steam Workshop: not now; the user will bring it up.
+- The push and repo creation happen only after the user's explicit go-ahead.
 
 ## Known limits
 - Not handled: pills/cards, secret/super secret rooms, crawlspaces, alt path (Downpour/Mines door,
