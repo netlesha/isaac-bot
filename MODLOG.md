@@ -25,7 +25,7 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
   `tools/progress.py` (progress charts over all sessions -> `runs/progress.png`).
 - `replay` module: ring of the last 90 updates (3 s) the brain saw and did; frozen on each player
   hit, dumped at game over as one `replay` EV line (room map, the hit) + one `rf` line per update.
-- Local git repo at the `isaac-bot` root (no remote); `runs/`, `shots/`, the bridge folder ignored.
+- Git repo at the `isaac-bot` root, remote `origin` = github.com/netlesha/isaac-bot; `runs/`, `shots/`, the bridge folder ignored.
   Keep files LF: Python `open(p, "w")` on Windows writes CRLF, use `newline=""` when editing.
 
 ## Facts verified in the real game
@@ -337,6 +337,10 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
   with Claude Code.
 - Steam Workshop: not now; the user will bring it up.
 - The push and repo creation happen only after the user's explicit go-ahead.
+- Published 2026-10-16: https://github.com/netlesha/isaac-bot (public, MIT, branch master).
+  History rewritten before the push (author email -> 180537638+netlesha@users.noreply.github.com,
+  `legacy/` dropped); the old history is in `../isaac-bot-before-publish-20261016.bundle`.
+  KB note PR: https://github.com/rehan-remade/universal-modder/pull/327
 
 ## Known limits
 - Not handled: pills/cards, secret/super secret rooms, crawlspaces, alt path (Downpour/Mines door,
