@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <name>Isaac Bot</name>
+  <directory>isaac_bot</directory>
+  <description>Offline single-player autopilot prototype: heuristic navigation, combat, projectile avoidance, pickups and a keyboard GUI</description>
+  <version>0.3.0</version>
+</metadata>

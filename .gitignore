@@ -1,0 +1,7 @@
+# Run records and screenshots stay local (large, regenerated every night)
+runs/
+shots/
+__pycache__/
+*.pyc
+# Written by tools/bridge.py at run time
+mod/isaacbot_bridge/
