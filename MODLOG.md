@@ -342,6 +342,39 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
   `legacy/` dropped); the old history is in `../isaac-bot-before-publish-20261016.bundle`.
   KB note PR: https://github.com/rehan-remade/universal-modder/pull/327
 
+## Mechanics decisions (user grilling, 2026-10-16)
+Ten questions on what the bot should learn next. Answers, in the user's terms:
+1. Win target: **Mom's Heart** (replaces "any ending" for the win statistic).
+2. Pills: drink only with Lucky Foot or an item with a similar effect (pills turn good); otherwise
+   keep picking them up as now, never use.
+3. Cards: use by a per-card situation table, but keep one card in reserve in case the angel/devil
+   room does not open after the boss. Damage cards have priority. If no deal room opened after the
+   boss, go back for a Joker (if seen on the floor) and use it.
+4. Secret rooms: bomb secret / super secret walls when bombs >= 2. Ignore the bedroom
+   (Isaac's / Barren room) for now; the user will define its behaviour later.
+5. Rooms with a price: only the curse room (enter when hearts >= 3, free with flight). Challenge,
+   sacrifice, arcade and black market stay skipped.
+6. Deals:
+   - a menu setting: prefer angel or devil deals;
+   - devil deal allowed if after paying the bot keeps >= 1 red container, or it has black, bone or
+     soul hearts so health cannot drop to zero after the pickup;
+   - The Lost and T.Lost take deal items for free;
+   - in deal rooms pick by priority, tier-4 items first (also for the Lost characters); the tier
+     list is our own table.
+7. Money: shop first, spare coins to beggars. Blood donation machines only after the floor is
+   cleared. The Lost and T.Lost must never touch blood donation machines or devil beggars. Slot
+   machines are not used.
+8. Bosses: own behaviour for the deadliest ones by the death records (Famine, type 218, Widow
+   first, then by frequency): distance, side of the room, when to shoot.
+9. Hazards: put out normal campfires with tears before passing near them (red/blue ones: go
+   around); spikes count as walls unless flying or invulnerable, and are crossed only when there
+   is no other way and hearts >= 3. Exception: retractable spikes (they sink into the floor) can be
+   crossed without flight while they are down. Check the down state in the real game.
+10. Alt path, Boss Rush, Hush: not now. First a steady path to Mom's Heart.
+
+Order of work (cheapest and most deaths saved first): 9 hazards, 8 boss patterns, 4 secret rooms,
+3 cards, 6 deals, 5 curse room, 7 money, 2 pills. Each change goes through the 30-seed bench.
+
 ## Known limits
 - Not handled: pills/cards, secret/super secret rooms, crawlspaces, alt path (Downpour/Mines door,
   knife pieces), T.Cain crafting, T.Forgotten/Soul and Jacob & Esau control specifics, Greed mode.
