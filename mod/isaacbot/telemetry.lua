@@ -27,6 +27,13 @@ return function(B)
         local s = snapshot(p)
         s.continued = continued and true or false
         s.seed = B.try(function() return game:GetSeeds():GetStartSeedString() end)
+        s.custom = B.try(function() return game:GetSeeds():IsCustomRun() end) or false
+        -- A bench run: the seed the bench asked for. Kept for the run (continue after a relaunch).
+        local b = B.S.bench
+        if not continued then
+            B.st.benchRun = (b and b.seeds[b.i] == s.seed) and b.i or nil
+        end
+        s.bench = B.st.benchRun
         s.goal = B.S.goal
         s.name = B.characterName(s.char)
         B.event("run_start", s)

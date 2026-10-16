@@ -96,6 +96,25 @@ def summarise(run):
     }
 
 
+def floor_stats(rows):
+    """Mean deepest floor of finished runs and the share that reached floors 3, 5 and 8."""
+    done = [r for r in rows if r["outcome"] != "unfinished"]
+    if not done:
+        return None
+    n = len(done)
+    return {"n": n, "mean": sum(r["deepest"] for r in done) / n,
+            "reach": {k: sum(1 for r in done if r["deepest"] >= k) / n for k in (3, 5, 8)}}
+
+
+def floor_line(fs):
+    if not fs:
+        return "нет завершённых забегов"
+    r = fs["reach"]
+    r = {int(k): v for k, v in r.items()}  # keys turn into strings in bench-*.json
+    return "средний достигнутый этаж %.2f; до 3-го дошли %.0f%%, до 5-го %.0f%%, до 8-го %.0f%% (из %d)" % (
+        fs["mean"], 100 * r[3], 100 * r[5], 100 * r[8], fs["n"])
+
+
 def cause_name(c):
     if not c:
         return "?"
@@ -117,6 +136,10 @@ def render(path, events):
     out.append("Время: %s — %s. Забегов: %d (чистых завершённых: %d)." % (first, last, len(rows), len(clean)))
     pct = 100.0 * len(wins) / len(clean) if clean else 0.0
     out.append("**Побед в чистых забегах на Сложной: %d из %d (%.0f%%).**" % (len(wins), len(clean), pct))
+    out.append("Чистые: " + floor_line(floor_stats(clean)) + ".")
+    seeded = [r for r in rows if r["cheat"] and r["outcome"] != "unfinished"]
+    if seeded:
+        out.append("С сидом или консолью, не в зачёт (%d): %s." % (len(seeded), floor_line(floor_stats(seeded))))
     out.append("")
 
     out.append("## Итоги по персонажам")

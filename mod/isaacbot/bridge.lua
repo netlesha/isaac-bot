@@ -24,6 +24,23 @@ return function(B)
         elseif cmd == "onwin" and arg then S.onWin = arg
         elseif cmd == "restart" and arg then S.autoRestart = (arg == "on")
         elseif cmd == "devil" and arg then S.devil = (arg == "on")
+        elseif cmd == "bench" and arg then
+            -- "bench <cap> <seed> <seed> ..." (seeds as 8 characters, no space): a fixed seed
+            -- set run in order, each ended by death, win, abandon or reaching floor cap + 1
+            -- (cap 0 = no cap). Starts at once. "bench off" stops after the current run.
+            if arg == "off" then
+                S.bench = nil
+            else
+                local seeds = {}
+                for k = 4, #words do
+                    local w = words[k]:upper()
+                    if #w == 8 then seeds[#seeds + 1] = w:sub(1, 4) .. " " .. w:sub(5, 8) end
+                end
+                S.bench = {seeds = seeds, i = 0, cap = tonumber(arg) or 0}
+                B.event("bench_start", {n = #seeds, cap = S.bench.cap})
+                if not B.st.dead then B.event("abandon", {room = B.st.room, why = "bench"}) end
+                B.st.restartAt = B.st.renderTick + 1
+            end
         elseif cmd == "newrun" then
             -- Watchdog gave up on this run (stuck): end it and start the next character.
             B.event("abandon", {room = B.st.room, mode = B.st.mode, age = B.st.roomAge, why = arg or "stuck"})
@@ -68,6 +85,8 @@ return function(B)
                 -- Plain console command (restart N, stage N, giveitem ...). Anything but
                 -- restart marks the run as not clean for the win statistics.
                 if words[1] ~= "restart" then B.st.cheat = true end
+                if words[1] == "seed" then B.st.seedNext = true end
+                if words[1] == "restart" then B.unseed() end
                 local out = B.try(function() return Isaac.ExecuteCommand(line) end)
                 B.log("bridge exec '" .. line .. "' -> " .. tostring(out))
             end

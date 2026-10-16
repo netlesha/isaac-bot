@@ -20,7 +20,12 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
 - `legacy/main_v0.3.0.lua` previous single-file version.
 - Tools: `tools/bridge.py` (send console/bot commands), `tools/runlog.py` (EV log report),
   `tools/verify_lua.py` (parse + unknown globals + dead code), `tools/night.py` (night runs: backup,
-  watchdog, relaunch), `tools/nightreport.py` (morning report -> `runs/report-*.md`).
+  watchdog, relaunch), `tools/nightreport.py` (morning report -> `runs/report-*.md`),
+  `tools/bench.py` (30-seed bench, daytime), `tools/deathview.py` (death replays -> PNG + timeline).
+- `replay` module: ring of the last 90 updates (3 s) the brain saw and did; frozen on each player
+  hit, dumped at game over as one `replay` EV line (room map, the hit) + one `rf` line per update.
+- Local git repo at the `isaac-bot` root (no remote); `runs/`, `shots/`, the bridge folder ignored.
+  Keep files LF: Python `open(p, "w")` on Windows writes CRLF, use `newline=""` when editing.
 
 ## Facts verified in the real game
 1. Input hook works for movement and shooting, **but door transitions query movement with
@@ -165,6 +170,21 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
    visited forever; `chooseGoalRoom` picked the room the bot stood in, `routeFloor` returned nil and
    the bot stood still until the 6-minute fast mode (night run 2026-10-16, stage 4 room gi 81).
    The status line kept the last mode ("off" after F9), so the stall looked like a disabled bot.
+34. `Room:GetGridPosition(0)` is the centre of cell 0, (40,120) in a 1x1 room; cells are 40 units;
+   `GetTopLeftPos()` is (60,140).
+35. Console `seed ABCD EFGH` starts a new run with that seed and keeps the character and
+   difficulty of the current run (Isaac/Hard stayed Isaac/Hard). It works from the game-over
+   screen as well (the bench restarts with it after each death). `restart <char>` after a seeded
+   run keeps the seed (after a bench every run would have been the last bench seed).
+   `Seeds:ClearStartSeed()` before `restart` gives a random seed, but the game then holds that
+   seed too (the next plain `restart` repeated it), so the mod clears before every plain restart
+   (`B.unseed`, also for bridge `restart`); the game logs a harmless "[ASSERT] Game Start Seed
+   was not set." each time. Verified: seed -> 4 restarts gave 4 different seeds.
+   `Seeds:IsCustomRun()` is useless for "clean": it stays true for every console-started run.
+   The mod tracks it itself: `seed` (bridge or bench) sets `st.seedNext`, MC_POST_GAME_STARTED
+   turns it into `st.seeded` = `st.cheat` (that reset used to clear the bridge's cheat flag).
+36. Game logic (and the bot) keeps running while the window is unfocused; only a pause menu stops
+   it. Bridge commands need no focus, so the bench runs in the background.
 
 ## Night runs (v0.5.0)
 - `python tools/night.py --until 09:00 --char 0` (started detached with `Start-Process`, output in
@@ -178,6 +198,17 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
   through the bridge sets `cheat`; the flag is in hb/death/win events).
 - `python tools/nightreport.py [night.jsonl]` -> `runs/report-<stamp>.md` (Russian): clean win %,
   per-character results, deaths by floor and last hit source, stuck/abandon counts, watchdog actions.
+
+## Seed bench and death replays (v0.5.0)
+- `python tools/bench.py [--cap N] [--n K] [--tag T]`: `restart 0`, then `bot bench <cap> <seeds>`;
+  the mod plays each seed of `tools/bench_seeds.txt` (30, Hard, Isaac) and starts the next one
+  itself after death, win or passing floor `cap` (`bench_cap`), then `bench_done`. Settings keep
+  the bench across a relaunch. Watchdog in daytime mode (`night.py --day`): no window focus, Esc,
+  menu keys or relaunch unless the user has been idle for 60 s (GetLastInputInfo).
+  Summary `runs/bench-<stamp>.md/.json`: mean floor reached, share reaching 3/5/8, wins, per-seed
+  result with the previous bench, git commit + dirty flag.
+- Acceptance rule (user, 2026-10-16): a change stays if the bench mean floor does not drop.
+- `python tools/deathview.py [jsonl|log.txt]` draws `runs/deaths/<stem>-<n>.png`.
 
 ## Verification log
 - 2026-10-15: v0.4.0 loaded, bot fought rooms (screenshots `shots/s3.png`). Stuck in a 1x2 room with a
@@ -248,6 +279,20 @@ and forbidden combos), routes the floor map and takes the exit that leads to the
   brain/floor/panel; `luamod` in the running night: no ERROR, bot walks rooms again; probe shows
   every room (incl. LTR/LBR) resolving to its own descriptor with VisitedCount. No LTL on that
   floor, so the original case is not replayed yet. That run is marked cheat (lua probes).
+- 2026-10-16 death replay + seed bench. Night watchdog stopped (it focused the window by day).
+  Smoke bench `bench.py --n 3 --cap 2 --tag smoke` (runs/bench-20261016-1149): run_start carries
+  `bench`/`seed`, Hard kept; seed 1 died on floor 1 -> `replay` + 90 `rf` lines dumped, `seed`
+  from the game-over screen started seed 2; seed 2 looped between rooms on floor 2 (abandoned
+  with `bot newrun floor`), seed 3 hit `bench_cap` on floor 3, then `bench_done` and the summary.
+  Found and fixed on the way: plain restarts after the bench kept the bench seed (fact 35);
+  hb `paused` is also true during room transitions (age 0), which made the watchdog focus the
+  window (now only paused with age > 0 counts); bench floor limit 15 min.
+  First findings from the data, not fixed yet (need the baseline bench first):
+  1. Q6SD SYX8 floor 1, Gemini (79): pinned in the top-right corner for the whole 3 s, wants
+     left, `D.choose` picks up-right into the wall at risk ~100. Inside a body every option
+     scores the same 12/step, so the overlap penalty has no gradient out of the body.
+  2. N3H2 E1FR floor 2: room 88, `stuck` going to door2 at (120-140, 190-217), then boss room
+     100 and rooms 89/75/64 marked unreachable, the bot bounces 84-71-85-86-87 for 6+ min.
 
 ## Goals and decisions (user grilling, 2026-10-16)
 - Done = any ending (any final cutscene/credits), on **Hard** difficulty.

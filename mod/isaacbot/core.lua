@@ -25,6 +25,7 @@ return function(B)
         preset = "Стандарт",    -- name of the active preset
         startPreset = nil,      -- preset applied when the game (Lua) loads
         stats = {runs = 0, wins = 0, deaths = 0, best = {}},
+        bench = nil,            -- {seeds = {"ABCD EFGH", ...}, i = next index - 1, cap = floor, tag}
     }
 
     -- Per-run / per-room runtime state.
@@ -52,6 +53,7 @@ return function(B)
         messageUntil = 0,
         cycleIndex = 0,
         cheat = false,      -- console commands other than restart were used this run
+        seeded = false,     -- this run was started with a set seed (`seed`, the bench)
     }
 
     -- Desired input this frame: [ButtonAction] = value (0..1). Taps expire on their own.
@@ -86,6 +88,14 @@ return function(B)
     end
 
     -- pcall wrapper returning the value or nil.
+    -- `restart` keeps the seed of a seeded run (after the bench every later run would be the last
+    -- bench seed). ClearStartSeed before it gives a random seed, but the run after that counts as
+    -- seeded again (its `restart` repeated the seed), so clear before every plain restart. The
+    -- game logs "[ASSERT] Game Start Seed was not set." each time; harmless.
+    function B.unseed()
+        B.try(function() game:GetSeeds():ClearStartSeed() end)
+    end
+
     function B.try(f, ...)
         local ok, v = pcall(f, ...)
         if ok then return v end
@@ -179,6 +189,7 @@ return function(B)
             useBombs = s.useBombs, pri = s.pri, exc = s.exc, presets = s.presets,
             preset = s.preset, startPreset = s.startPreset or "",
             forbiddenPairs = s.forbiddenPairs, stats = s.stats, cycleIndex = B.st.cycleIndex,
+            bench = s.bench or false,  -- nil would drop the key and keep nothing
             bridge = B.st.bridgeData,  -- keep the bridge channel (see bridge.lua) as last seen
         }
         local ok, encoded = pcall(json.encode, data)
@@ -208,6 +219,7 @@ return function(B)
             if type(data[k]) == "table" then s[k] = data[k] end
         end
         if type(s.stats.best) ~= "table" then s.stats.best = {} end
+        s.bench = (type(data.bench) == "table" and type(data.bench.seeds) == "table") and data.bench or nil
         if type(data.cycleIndex) == "number" then B.st.cycleIndex = data.cycleIndex end
         local function ids(t)
             local out = {}

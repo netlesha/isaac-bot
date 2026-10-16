@@ -812,7 +812,8 @@ return function(B)
 
         -- Final move through the dodge layer.
         local weight = dodgeWeight(p, ctx)
-        local mx, my = D.choose(p, dx, dy, weight)
+        local mx, my, risk = D.choose(p, dx, dy, weight)
         if mx and (mx ~= 0 or my ~= 0) then B.move(mx, my) end
+        if B.replay then B.replay.record(p, ents, dx, dy, mx, my, risk, weight) end
     end
 end

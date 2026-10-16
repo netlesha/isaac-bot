@@ -7,7 +7,7 @@ local mod = RegisterMod("Isaac Bot", 1)
 local B = {mod = mod, game = Game(), json = require("json")}
 _G.IsaacBot = B  -- reachable from the debug console: lua IsaacBot.st.mode
 
-local MODULES = {"core", "grid", "danger", "combat", "items", "floor", "brain", "presets", "panel", "bridge", "telemetry"}
+local MODULES = {"core", "grid", "danger", "combat", "items", "floor", "brain", "presets", "panel", "bridge", "telemetry", "replay"}
 for _, name in ipairs(MODULES) do
     local ok, f = pcall(include, "isaacbot." .. name)
     if ok and type(f) == "function" then
@@ -84,10 +84,33 @@ local function nextCharacter()
     return st.startChar
 end
 
+-- Next seed of a running bench, or nil (and the bench ends) when all are done.
+local function benchNext()
+    local b = B.S.bench
+    if not b then return nil end
+    b.i = (b.i or 0) + 1
+    if b.i > #b.seeds then
+        B.event("bench_done", {n = #b.seeds})
+        B.S.bench = nil
+        return nil
+    end
+    return b.seeds[b.i]
+end
+
 local function doRestart()
     st.restartAt = nil
+    local seed = benchNext()
+    if seed then
+        -- `seed` keeps the character and difficulty on screen (verified: Isaac, Hard).
+        B.saveConfig()
+        st.seedNext = true
+        B.event("restart", {seed = seed, bench = B.S.bench.i})
+        Isaac.ExecuteCommand("seed " .. seed)
+        return
+    end
     local char = nextCharacter()
     B.saveConfig()
+    B.unseed()
     B.event("restart", {char = char, name = B.characterName(char)})
     Isaac.ExecuteCommand("restart " .. tostring(char))
 end
@@ -97,7 +120,13 @@ mod:AddCallback(ModCallbacks.MC_POST_GAME_STARTED, guard("game_started", functio
     st.won, st.dead, st.restartAt, st.deadFrames = false, false, nil, 0
     st.runStartTick, st.floorStartTick = st.tick, st.tick
     st.lastHit = nil
-    if not continued then st.cheat = false end
+    -- A run started with a set seed (console `seed`, the bench) never counts as clean; the
+    -- flag set by the bridge command that started it does not survive this reset otherwise.
+    -- Seeds:IsCustomRun() cannot tell: it stays true for every run started from the console.
+    if not continued then
+        st.seeded, st.seedNext = st.seedNext or false, nil
+        st.cheat = st.seeded
+    end
     B.items.owned = {}
     local p = B.player()
     st.startChar = p and B.playerType(p) or 0
@@ -116,6 +145,7 @@ mod:AddCallback(ModCallbacks.MC_POST_GAME_END, guard("game_end", function(_, isG
             st.dead = true
             B.S.stats.deaths = (B.S.stats.deaths or 0) + 1
             B.tele.death()
+            if B.replay then B.replay.dump() end
             B.saveConfig()
         end
         if B.S.autoRestart and st.enabled then st.restartAt = st.renderTick + 150 end
@@ -129,6 +159,14 @@ mod:AddCallback(ModCallbacks.MC_POST_NEW_LEVEL, guard("new_level", function()
     B.floor.build()
     B.brain.onNewLevel()
     B.tele.floor()
+    local b = B.S.bench
+    if b and (b.cap or 0) > 0 and st.benchRun then
+        local _, eff = B.stageInfo()
+        if eff > b.cap then
+            B.event("bench_cap", {eff = eff, bench = st.benchRun})
+            st.restartAt = st.renderTick + 1
+        end
+    end
     local p = B.player()
     if p then
         local _, eff = B.stageInfo()
@@ -148,7 +186,10 @@ mod:AddCallback(ModCallbacks.MC_POST_NEW_ROOM, guard("new_room", function()
 end))
 
 mod:AddCallback(ModCallbacks.MC_ENTITY_TAKE_DMG, guard("take_dmg", function(_, entity, amount, flags, source)
-    if entity and entity.Type == EntityType.ENTITY_PLAYER then B.tele.hit(amount, flags, source) end
+    if entity and entity.Type == EntityType.ENTITY_PLAYER then
+        B.tele.hit(amount, flags, source)
+        if B.replay then B.replay.onHit(st.lastHit) end
+    end
     return nil
 end))
 

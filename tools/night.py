@@ -99,6 +99,19 @@ def keep_awake(on):
         pass
 
 
+def user_idle_s():
+    """Seconds since the last keyboard/mouse input anywhere on this PC (GetLastInputInfo)."""
+    class LASTINPUTINFO(ctypes.Structure):
+        _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+    try:
+        info = LASTINPUTINFO()
+        info.cbSize = ctypes.sizeof(info)
+        ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info))
+        return (ctypes.windll.kernel32.GetTickCount() - info.dwTime) / 1000.0
+    except Exception:
+        return 1e9
+
+
 def steam_userdata():
     for base in (r"C:\Program Files (x86)\Steam\userdata", r"C:\Program Files\Steam\userdata"):
         hits = sorted(glob.glob(os.path.join(base, "*", "250900")), key=os.path.getmtime)
@@ -108,12 +121,18 @@ def steam_userdata():
 
 
 class Night:
+    PREFIX = "night"
+    DAY_IDLE_S = 60  # daytime mode: focus/launch only after this long without user input
+    STUCK_FLOOR_S = STUCK_FLOOR_S
+
     def __init__(self, end, args):
         self.end = end
         self.args = args
         RUNS.mkdir(exist_ok=True)
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
-        self.out_path = RUNS / ("night-%s.jsonl" % stamp)
+        self.out_path = RUNS / ("%s-%s.jsonl" % (self.PREFIX, stamp))
+        self.stop = False
+        self.day_wait_said = 0
         self.out = open(self.out_path, "a", encoding="utf-8")
         self.offset = None
         self.rest = b""
@@ -165,7 +184,19 @@ class Night:
 
     # -------------------------------------------------------- game process
 
+    def user_busy(self):
+        """Daytime mode: the user is at the PC, so nothing may take focus or launch the game."""
+        if not getattr(self.args, "day", False):
+            return False
+        busy = user_idle_s() < self.DAY_IDLE_S
+        if busy and time.time() - self.day_wait_said > 300:
+            self.say("user active, focus actions wait")
+            self.day_wait_said = time.time()
+        return busy
+
     def drive(self, *cmds):
+        if "focus" in cmds and self.user_busy():
+            return False, "user active"
         code, out = um("win", "drive", "--proc", EXE[:-4], *cmds, timeout=60)
         return code == 0, out
 
@@ -258,7 +289,9 @@ class Night:
             return
         self.hb = e
         now = time.time()
-        self.paused_hbs = self.paused_hbs + 1 if e.get("paused") else 0
+        # IsPaused() is also true during a room transition; those beats come with room age 0.
+        real_pause = e.get("paused") and (e.get("age") or 0) > 0
+        self.paused_hbs = self.paused_hbs + 1 if real_pause else 0
         self.dead_hbs = self.dead_hbs + 1 if e.get("dead") else 0
         if e.get("paused"):
             self.last_floor += 60  # paused time does not count toward the floor limit
@@ -285,7 +318,7 @@ class Night:
             self.say("stuck in room %s for %d s, new run" % (e.get("room"), (e.get("age") or 0) // 30))
             bridge.main(["bot newrun room"])
             self.cooldown_until = now + 120
-        elif now - self.last_floor > STUCK_FLOOR_S:
+        elif now - self.last_floor > self.STUCK_FLOOR_S:
             self.say("no new floor for %d min, new run" % ((now - self.last_floor) // 60))
             bridge.main(["bot newrun floor"])
             self.last_floor = now
@@ -306,6 +339,8 @@ class Night:
             self.menu_start()
             self.last_bot = time.time() - SILENT_S + 120
             return True
+        if self.user_busy():
+            return True  # a relaunch grabs focus; wait until the user is away
         if self.relaunches >= MAX_RELAUNCH:
             self.say("relaunch limit reached, watchdog stops")
             return False
@@ -315,7 +350,7 @@ class Night:
         return True
 
     def run(self):
-        self.say("night start", until=self.end.isoformat(timespec="minutes"), log=str(self.out_path))
+        self.say("%s start" % self.PREFIX, until=self.end.isoformat(timespec="minutes"), log=str(self.out_path))
         keep_awake(True)
         try:
             if not self.args.no_backup and not self.backup():
@@ -325,21 +360,26 @@ class Night:
                 self.launch()
             else:
                 self.tail()
-                bridge.main(["bot on", "bot restart on", "bot char %s" % self.args.char, "bot status"])
-            while dt.datetime.now() < self.end:
+                self.start_game()
+            while dt.datetime.now() < self.end and not self.stop:
                 time.sleep(POLL_S)
                 self.tail()
                 if not self.check_silence():
                     break
-            self.say("night end")
+            self.say("%s end" % self.PREFIX)
         except KeyboardInterrupt:
             self.say("stopped by Ctrl+C")
         finally:
             keep_awake(False)
             self.out.close()
-            report = nightreport.write(self.out_path)
-            print("report:", report)
+            print("report:", self.report())
         return 0
+
+    def start_game(self):
+        bridge.main(["bot on", "bot restart on", "bot char %s" % self.args.char, "bot status"])
+
+    def report(self):
+        return nightreport.write(self.out_path)
 
 
 def main(argv):
@@ -349,6 +389,8 @@ def main(argv):
     ap.add_argument("--no-backup", action="store_true")
     ap.add_argument("--char", default="0", help="bot char setting for restarts: PlayerType, same, cycle")
     ap.add_argument("--menu-test", action="store_true", help="only send the menu key sequence")
+    ap.add_argument("--day", action="store_true",
+                    help="daytime: no focus, menu keys or relaunch while the user is at the PC")
     args = ap.parse_args(argv)
     now = dt.datetime.now()
     if args.hours:
